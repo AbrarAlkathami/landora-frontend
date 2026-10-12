@@ -11,8 +11,9 @@ async function proxy(request: NextRequest, context: {
   const record = ["parcels", "inquiries"].includes(path[0]) && path.length === 2;
   const write = request.method === "PATCH" && record;
   const create = request.method === "POST" && path[0] === "parcels" && path.length === 1;
+  const chat = request.method === "POST" && path.join("/") === "chat/admin";
   const remove = request.method === "DELETE" && record;
-  if (!read && !write && !remove && !create) return NextResponse.json({
+  if (!read && !write && !remove && !create && !chat) return NextResponse.json({
     detail: "Endpoint not found"
   }, {
     status: 404
@@ -20,6 +21,12 @@ async function proxy(request: NextRequest, context: {
   const base = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "");
   try {
     let body: string | undefined;
+    if (chat) {
+      let input;
+      try { input = await request.json(); } catch { return NextResponse.json({detail:"Invalid JSON body."},{status:400}); }
+      if (typeof input?.message !== "string" || !input.message.trim() || input.message.length > 4000) return NextResponse.json({detail:"Enter a question under 4,000 characters."},{status:400});
+      body = JSON.stringify({message:input.message.trim()});
+    }
     if (write || create) {
       let input;
       try { input = await request.json(); } catch { return NextResponse.json({ detail: "Invalid JSON body." }, { status: 400 }); }
@@ -44,7 +51,7 @@ async function proxy(request: NextRequest, context: {
         body
       } : {}),
       cache: "no-store",
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(chat ? 90000 : 15000)
     });
     if (response.status >= 500) return NextResponse.json({
       detail: "Sarj data is temporarily unavailable. Please retry."

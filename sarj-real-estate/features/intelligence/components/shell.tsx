@@ -13,8 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BusinessProvider, useBusiness } from "./provider";
 import { DetailDrawers } from "./details";
-import { adminAnswer, adminPrompts } from "../lib/advisor";
-import { compact, title } from "../lib/analytics";
+import { adminPrompts } from "../lib/advisor";
+import { askAdminAdvisor } from "../lib/api";
+import type { ChatResponse } from "@/features/chat/api/chat";
+import { title } from "../lib/analytics";
 const items = [{
   href: "/admin",
   label: "Overview",
@@ -149,8 +151,6 @@ function AdminAssistant() {
     locale
   } = useLanguage();
   const {
-    parcels,
-    inquiries,
     loading,
     error,
     openInquiry,
@@ -159,37 +159,34 @@ function AdminAssistant() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  type Answer = ReturnType<typeof adminAnswer>;
+  type Answer = ChatResponse;
   const [messages, setMessages] = useState<{
     question: string;
     answer?: Answer;
+    error?: string;
   }[]>([]);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lock = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
   useEffect(() => {
     bottom.current?.scrollIntoView({
       behavior: "smooth",
       block: "nearest"
     });
   }, [messages, busy]);
-  function send(text: string) {
-    if (!text.trim() || busy || loading || error) return;
-    setMessages(prev => [...prev, {
-      question: text
-    }]);
-    setInput("");
-    setBusy(true);
-    timer.current = setTimeout(() => {
-      const answer = adminAnswer(text, parcels, inquiries);
-      setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? {
-        ...m,
-        answer
-      } : m));
-      setBusy(false);
-    }, 450);
+  async function send(text: string, retryIndex?: number) {
+    const question = text.trim();
+    if (!question || lock.current || loading || error) return;
+    lock.current = true;
+    const index = retryIndex ?? messages.length;
+    if(retryIndex === undefined) setMessages(prev => [...prev, {question}]);
+    else setMessages(prev => prev.map((m,i) => i === index ? {...m,error:undefined} : m));
+    setInput(""); setBusy(true);
+    try {
+      const answer = await askAdminAdvisor(question);
+      setMessages(prev => prev.map((m,i) => i === index ? {...m,answer,error:undefined} : m));
+    } catch(e) {
+      setMessages(prev => prev.map((m,i) => i === index ? {...m,error:e instanceof Error ? e.message : "Couldn’t complete the request."} : m));
+    } finally { lock.current = false; setBusy(false); }
   }
   return <>
     <button className="bi-ai-fab" onClick={() => setOpen(true)}><Sparkles size={17} />{t("Ask Sarj intelligence")}<span className="bi-ai-dot" /></button>
@@ -204,12 +201,12 @@ function AdminAssistant() {
             <SheetDescription>{t("A second perspective on your business.")}</SheetDescription>
           </div>
         </div>
-        <div className="bi-assistant-label">{t("PREVIEW ASSISTANT · SUMMARIES FROM LOADED RECORDS")}</div>
+        <div className="bi-assistant-label">{t("AI ASSISTANT · LIVE BUSINESS DATA")}</div>
         <div className="bi-ai-scroll">
           <h3>{t("How can I help?")}</h3>
           <p className="bi-muted">{t("Explore demand, find opportunities, and turn a business signal into an action.")}</p>
           {!messages.length && <div className="bi-prompt-list">
-            {adminPrompts.map(p => <button key={p} onClick={() => send(p)} disabled={loading || !!error}>
+            {adminPrompts.map(p => <button key={p} onClick={() => void send(t(p))} disabled={loading || !!error}>
               {t(p)}
               <ArrowUpRight size={14} />
             </button>)}
@@ -228,7 +225,7 @@ function AdminAssistant() {
               {m.answer && <div className="bi-ai-answer">
                 <span>{t("SARJ INTELLIGENCE")}</span>
                 <p>
-                  {m.answer.text}
+                  {m.answer.answer}
                 </p>
                 {m.answer.parcels.map(p => <button className="bi-ai-record" key={p.parcel_id} onClick={() => {
                   setOpen(false);
@@ -236,7 +233,7 @@ function AdminAssistant() {
                 }}>
                   <span>
                     {locale === "ar" ? p.district_ar : p.district_en}
-                    <small>{t(p.days_on_market)}{t(" days · ")}{t(title(p.land_type))}</small>
+                    <small>{t(title(p.land_type))}{t(" · ")}{t(p.listing_type)}</small>
                   </span>
                   <ArrowUpRight size={15} />
                 </button>)}
@@ -246,15 +243,12 @@ function AdminAssistant() {
                 }}>
                   <span>
                     {q.investor_name}
-                    <small>{t(q.area_of_city_wanted)}{t(" · ")}{t(q.prefers)}{t(" · SAR ")}{t(compact(q.budget_sar))}</small>
+                    <small>{t(q.area_of_city_wanted)}{t(" · ")}{t(q.land_type_wanted)}{t(" · ")}{t(q.status)}</small>
                   </span>
                   <ArrowUpRight size={15} />
                 </button>)}
-                {m.answer.links.map(link => <Link href={link.href} onClick={() => setOpen(false)} className="bi-text-link" key={link.href}>
-                  {t(link.label)}
-                  <ArrowUpRight size={14} />
-                </Link>)}
               </div>}
+              {m.error && <div className="bi-ai-answer" role="alert"><p className="bi-error">{t(m.error)}</p><Button variant="outline" size="sm" disabled={busy} onClick={() => void send(m.question,index)}>{t("Try again")}</Button></div>}
             </motion.div>)}
           </AnimatePresence>
           {busy && <div className="bi-thinking" role="status"><Loader2 size={14} className="animate-spin" />{t("Considering the business signals…")}</div>}
@@ -269,7 +263,7 @@ function AdminAssistant() {
             <Send size={16} />
           </Button>
         </form>
-        <p className="bi-ai-disclaimer">{t("Frontend preview with deterministic summaries. No LLM request is made.")}</p>
+        <p className="bi-ai-disclaimer">{t("AI-generated from current business records. Confirm important details before acting.")}</p>
       </SheetContent>
     </Sheet>
   </>;

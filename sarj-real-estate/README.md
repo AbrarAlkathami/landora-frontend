@@ -27,4 +27,4 @@ npm run lint
 npm run build
 ```
 
-`npx next build --webpack` is available for environments that restrict Turbopack workers. The leadership workspace at `/admin` reads the existing database, supports inquiry status updates, and offers a mock intelligence assistant. See [ADMIN-INTELLIGENCE.md](./ADMIN-INTELLIGENCE.md) for routes, business definitions, and tests.
+`npx next build --webpack` is available for environments that restrict Turbopack workers. The leadership workspace at `/admin` reads the existing database, supports inquiry status updates, and offers an LLM intelligence assistant grounded in current database records. See [ADMIN-INTELLIGENCE.md](./ADMIN-INTELLIGENCE.md) for routes, business definitions, and tests.

@@ -1,5 +1,6 @@
 import type { Parcel } from "@/features/parcels/types/parcel";
 import type { Inquiry } from "@/features/inquiries/types/inquiry";
+import type { ChatResponse } from "@/features/chat/api/chat";
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, {
     ...options,
@@ -61,4 +62,7 @@ export function deleteRecord(kind: "parcels" | "inquiries", id: string) {
 }
 export function createLand(data: Record<string, unknown>) {
   return request<Parcel>("parcels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+}
+export function askAdminAdvisor(message: string) {
+  return request<ChatResponse>("chat/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({message}) });
 }

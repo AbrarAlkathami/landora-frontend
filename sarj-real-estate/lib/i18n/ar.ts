@@ -1,5 +1,7 @@
 export const arabic: Record<string, string> = {
   "Home": "الرئيسية",
+  "AI ASSISTANT · LIVE BUSINESS DATA": "مساعد ذكي · بيانات العمل الحالية",
+  "AI-generated from current business records. Confirm important details before acting.": "إجابات الذكاء الاصطناعي مبنية على سجلات العمل الحالية. تأكد من التفاصيل المهمة قبل اتخاذ القرار.",
   "Price basis must match sale or annual lease.": "يجب أن يتوافق أساس السعر مع البيع أو الإيجار السنوي.",
   "market segments": "شرائح السوق",
   "How gap levels are calculated": "كيف تُحسب مستويات الفجوة؟",

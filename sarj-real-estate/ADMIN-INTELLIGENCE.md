@@ -28,7 +28,7 @@ Land Portfolio includes an Add land form. Parcel and inquiry row menus provide V
 
 The provider loads both datasets together, supports explicit refresh, shows loading skeletons and retry states, and never substitutes fictional records when the backend fails. A successful status update replaces that inquiry in the shared snapshot; demand, pipeline counts, matches, and insights recompute immediately. A failure keeps the original record and displays a retryable error.
 
-No schema migrations or new backend services are needed. Existing API/schema behavior supports the status updates. The admin assistant is deliberately a frontend preview, as requested, and does not call the backend LLM or send messages to investors.
+The admin LLM connection needs no additional schema migration. It uses the existing chat endpoint with current SQL records. It performs read-only analysis and does not send messages to investors.
 
 ## Business definitions
 
@@ -50,7 +50,7 @@ The initial repository fixture has 120 parcels, 62 available, 48 inquiries, 14 o
 
 Drawers use the existing shadcn/Base UI focus-managed sheet component. Inquiry detail shows all stored fields, the full stated ambition, up to three ranked available parcels with reasons and tradeoffs, a status editor, and investor phone/WhatsApp links. Contact links open only when clicked. Parcel detail shows pricing basis, location links, market age, matching open inquiries, and the investor-facing listing.
 
-`features/intelligence/lib/advisor.ts` exports suggested questions and `adminAnswer`, a deterministic adapter over the loaded records. Its structured response contains summary text, parcel records, inquiry records, and drill-down links. Replacing that adapter with a real async LLM endpoint can preserve the existing reply UI. The preview is labeled in the drawer; unknown questions receive a current business summary rather than an invented answer.
+`features/intelligence/lib/advisor.ts` exports suggested questions only. The drawer calls `askAdminAdvisor` asynchronously and displays the generated backend answer with linked parcels and inquiries. Errors offer retry; there is no deterministic response adapter or scripted fallback.
 
 ## Structure and checks
 
@@ -66,3 +66,5 @@ node --test tests/intelligence.test.mjs
 The analytics tests use Node's built-in runner and native TypeScript stripping (Node 22.18+). Seven tests cover segment reconciliation, missing prices, budget basis, separate averages, budget-driven gaps, pipeline status changes, empty data, and dynamic insight ordering. Additional checks validate filtered component rendering, API pagination, mutation forwarding, immutable IDs, 204 responses, and create/edit/delete persistence with duplicate-ID and parcel-reference checks in an isolated SQLite database. No live records are created, changed, or deleted during verification.
 
 The production build and tests pass. Lint retains one pre-existing unused import warning in `features/chat/types/chat.ts`. This sandbox cannot launch Chrome or reach the live local backend, so browser and live-service checks remain unverified. Start the existing backend, run `npm run dev`, and open `http://localhost:3000/admin` for local review.
+
+The admin Sarj Intelligence drawer calls `/api/admin/chat/admin`, which forwards to the existing FastAPI `/api/v1/chat/admin` LLM endpoint. The backend reads all current parcel and inquiry records and supplies computed counts, unmatched inquiry IDs, oldest available listings, and separate purchase/rent averages. The model generates the answer and chooses up to five linked parcels/inquiries, with IDs checked against the database snapshot. Suggested prompts are translated before sending. Failed requests show retry controls; no scripted answer fallback is used. Requires the backend OpenAI API key and a backend restart after deployment.
