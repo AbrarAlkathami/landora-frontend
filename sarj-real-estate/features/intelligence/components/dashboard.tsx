@@ -2,7 +2,7 @@
 
 import { useLanguage } from "@/components/shared/language";
 import Link from "next/link";
-import { ArrowUpRight, ArrowRight, Layers, Map, Users, Target, Lightbulb, Clock3, Check } from "lucide-react";
+import { ArrowUpRight, ArrowRight, Layers, Map, Users, Target, Lightbulb, Clock3, Check, TrendingUp, CircleAlert, Database, ChevronDown } from "lucide-react";
 import { useBusiness, DataBoundary } from "./provider";
 import { AreaChart, PortfolioChart, PipelineChart, LandTypeDemand } from "./charts";
 import { compact, currency, lower } from "../lib/analytics";
@@ -46,22 +46,33 @@ export function InsightCards({
   const {
     observations
   } = useBusiness();
-  return <div className={`bi-insight-grid ${all ? "bi-insight-grid-all" : ""}`}>
-    {(all ? observations : observations.slice(0, 3)).map((i, index) => <Link href={i.href} className={`bi-insight-card tone-${i.tone}`} key={i.label}>
+  const icons: Record<string, typeof Lightbulb> = {
+    "DEMAND SIGNAL": TrendingUp, "OPPORTUNITY GAP": CircleAlert,
+    "INVENTORY TO REVISIT": Clock3, "HIGH-INTENT PIPELINE": Target,
+    "FOLLOW-UP OPPORTUNITY": Users, "READY FOR OPPORTUNITY": Lightbulb
+  };
+  return <>
+    <p className="bi-insights-method"><Database size={13} />{t("Current records · largest groups first")}</p>
+    <div className={`bi-insight-grid ${all ? "bi-insight-grid-all" : ""}`}>
+    {(all ? observations : observations.slice(0, 3)).map(i => {
+      const Icon = icons[i.label] ?? Lightbulb;
+      return <article className={`bi-insight-card tone-${i.tone}`} key={i.label}>
       <div className="bi-insight-label">
-        <span className="bi-insight-number">{t("0")}{t(index + 1)}</span>
-        {t(i.label)}
-        <ArrowUpRight size={15} />
+        <span className="bi-insight-icon"><Icon size={19} /></span>
+        <span>{t(i.label)}</span>
+      </div>
+      <div className="bi-insight-metric">
+        <strong>{t(i.affected)}</strong>
+        <span>{t(i.unit === "parcels" ? "affected parcels" : "affected inquiries")}</span>
       </div>
       <h3>
         {t(i.title)}
       </h3>
-      <p>
-        {t(i.body)}
-      </p>
-      <span className="bi-insight-action">{t("Explore the signal")}<ArrowRight size={13} /></span>
-    </Link>)}
-  </div>;
+      <details className="bi-insight-basis"><summary>{t("Why this signal")}<ChevronDown size={14} /></summary><p>{t(i.body)}</p><p>{t(i.basis)}</p></details>
+      <Link href={i.href} className="bi-insight-action">{t(i.unit === "parcels" ? "View parcels" : "View inquiries")}<ArrowRight size={14} /></Link>
+    </article>;
+    })}
+  </div></>;
 }
 export function Dashboard() {
   const {

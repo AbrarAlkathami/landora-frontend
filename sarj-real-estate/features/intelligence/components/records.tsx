@@ -2,12 +2,17 @@
 
 import { useLanguage } from "@/components/shared/language";
 import { useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Search, SlidersHorizontal, X, LayoutGrid, List, ArrowLeft, ArrowRight, Users, Map as MapIcon, Clock3 } from "lucide-react";
 import { useBusiness, DataBoundary } from "./provider";
 import { PageHeading } from "./dashboard";
 import { StatusBadge } from "./details";
+import { AddLandButton, RecordActions } from "./record-actions";
 import { areas, currency, lower, title, transaction, isOpen, isPriority } from "../lib/analytics";
 export function useRecordFilters() {
   const search = useSearchParams();
@@ -41,12 +46,27 @@ type FilterDef = {
     label: string;
   }[];
 };
+function RecordSelect({ label, options, value, onChange }: {
+  label: string; options: FilterDef["options"]; value: string; onChange: (value: string) => void;
+}) {
+  const { t } = useLanguage();
+  const selectedLabel = options.find(option => option.value === value)?.label ?? label;
+  return <div className="bi-filter-control"><Select value={value} onValueChange={value => onChange(value ?? "")}>
+    <SelectTrigger className="bi-record-select" aria-label={t(label)}><SelectValue>{t(selectedLabel)}</SelectValue></SelectTrigger>
+    <SelectContent align="start" alignItemWithTrigger={false}>
+      <SelectItem value="">{t(label)}</SelectItem>
+      {options.map(option => <SelectItem key={option.value} value={option.value}>{t(option.label)}</SelectItem>)}
+    </SelectContent>
+  </Select></div>;
+}
 export function Filters({
   definitions,
-  placeholder
+  placeholder,
+  primaryKeys = ["status", "area"]
 }: {
   definitions: FilterDef[];
   placeholder: string;
+  primaryKeys?: string[];
 }) {
   const {
     t
@@ -56,32 +76,26 @@ export function Filters({
     update,
     reset
   } = useRecordFilters();
+  const [expanded, setExpanded] = useState(false);
+  const primary = definitions.filter(d => primaryKeys.includes(d.key));
+  const secondary = definitions.filter(d => !primaryKeys.includes(d.key));
+  const extraCount = secondary.filter(d => search.get(d.key)).length;
   const keys = Array.from(new Set([...definitions.map(d => d.key), "priority", "unmatched", "stale", "highDemand", "open"]));
   const active = keys.filter(k => search.get(k));
+  const renderFilter = (d: FilterDef) => <RecordSelect key={d.key} label={d.label} options={d.options} value={search.get(d.key) ?? ""} onChange={value => update(d.key, value)} />;
   return <div className="bi-filter-panel">
     <div className="bi-filter-row">
       <div className="bi-search">
         <Search size={16} />
-        <input aria-label={placeholder} placeholder={placeholder} value={search.get("search") ?? ""} onChange={e => update("search", e.target.value)} />
-        {search.get("search") && <button aria-label={t("Clear search")} onClick={() => update("search", "")}>
-          <X size={13} />
-        </button>}
+        <Input aria-label={placeholder} placeholder={placeholder} value={search.get("search") ?? ""} onChange={e => update("search", e.target.value)} />
+        {search.get("search") && <Button variant="ghost" size="icon-sm" aria-label={t("Clear search")} onClick={() => update("search", "")}><X size={13} /></Button>}
       </div>
-      <SlidersHorizontal size={15} className="bi-filter-icon" />
-      {definitions.map(d => <label key={d.key}>
-        <span className="sr-only">
-          {t(d.label)}
-        </span>
-        <select value={search.get(d.key) ?? ""} onChange={e => update(d.key, e.target.value)}>
-          <option value="">
-            {t(d.label)}
-          </option>
-          {d.options.map(o => <option value={o.value} key={o.value}>
-            {t(o.label)}
-          </option>)}
-        </select>
-      </label>)}
+      {primary.map(renderFilter)}
+      <Button variant={expanded ? "secondary" : "outline"} className="bi-more-filters" aria-expanded={expanded} aria-controls="record-extra-filters" onClick={() => setExpanded(value => !value)}>
+        <SlidersHorizontal size={15} />{t("More filters")}{extraCount > 0 && <span>{extraCount}</span>}
+      </Button>
     </div>
+    {expanded && <div className="bi-extra-filters" id="record-extra-filters">{secondary.map(renderFilter)}</div>}
     <AnimatePresence>
       {active.length > 0 && <div className="bi-filter-chips">
         {active.map(key => <motion.button key={key} initial={{
@@ -225,83 +239,73 @@ export function InquiriesPage() {
         <span aria-live="polite"><strong>
             {t(results.length)}
           </strong>{t(" investor inquiries match this view")}</span>
-        <label>
-          <span className="sr-only">{t("Sort inquiries")}</span>
-          <select value={search.get("sort") ?? "newest"} onChange={e => update("sort", e.target.value)}>
-            <option value="newest">{t("Newest first")}</option>
-            <option value="oldest">{t("Oldest first")}</option>
-            <option value="budget">{t("Budget: high to low")}</option>
-          </select>
-        </label>
+        <RecordSelect label="Sort inquiries" value={search.get("sort") ?? "newest"} onChange={value => update("sort", value)} options={[
+          {value:"newest",label:"Newest first"}, {value:"oldest",label:"Oldest first"}, {value:"budget",label:"Budget: high to low"}
+        ]} />
       </div>
       <div className="bi-table-panel">
         <div className="bi-table-scroll">
-          <table className="bi-table bi-inquiry-table">
-            <thead>
-              <tr>
-                <th>{t("Investor / inquiry")}</th>
-                <th>{t("Date / intent")}</th>
-                <th>{t("Land / area")}</th>
-                <th>{t("Preference")}</th>
-                <th>{t("Budget")}</th>
-                <th>{t("Channel")}</th>
-                <th>{t("Status")}</th>
-                <th>
+          <Table className="bi-table bi-inquiry-table">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Investor / inquiry")}</TableHead>
+                <TableHead>{t("Date / intent")}</TableHead>
+                <TableHead>{t("Land / area")}</TableHead>
+                <TableHead>{t("Preference")}</TableHead>
+                <TableHead>{t("Budget")}</TableHead>
+                <TableHead>{t("Channel")}</TableHead>
+                <TableHead>{t("Status")}</TableHead>
+                <TableHead>
                   <span className="sr-only">{t("Inspect inquiry")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(q => <tr key={q.inquiry_id}>
-                <td>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(q => <TableRow key={q.inquiry_id}>
+                <TableCell>
                   <button className="bi-cell-link" onClick={() => openInquiry(q.inquiry_id)}>
                     {q.investor_name}
                     <small>
                       {q.inquiry_id}
                     </small>
                   </button>
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {q.date}
                   <small>
                     {t(title(q.intent))}
                   </small>
-                  <span className="bi-wants" title={q.wants_to}>
-                    {q.wants_to}
-                  </span>
-                </td>
-                <td>
+
+                </TableCell>
+                <TableCell>
                   {t(title(q.land_type_wanted))}
                   <small>{t(q.area_of_city_wanted)}{t(" Riyadh")}</small>
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {t(transaction(q.prefers) === "sale" ? "Buy" : title(q.prefers))}
-                </td>
-                <td className="bi-budget-cell">
+                </TableCell>
+                <TableCell className="bi-budget-cell">
                   {t(q.budget_sar === null ? "Not provided" : currency(q.budget_sar))}
                   <small>
                     {t(q.budget_basis ?? "Confirm budget basis")}
                   </small>
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {t(title(q.channel))}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   <StatusBadge status={q.status} />
-                </td>
-                <td>
-                  <button className="bi-row-action" aria-label={`Inspect ${q.investor_name}'s inquiry`} onClick={() => openInquiry(q.inquiry_id)}>
-                    <ArrowUpRight size={16} />
-                  </button>
-                </td>
-              </tr>)}
-            </tbody>
-          </table>
+                </TableCell>
+                <TableCell>
+                  <RecordActions kind="inquiries" record={q} />
+                </TableCell>
+              </TableRow>)}
+            </TableBody>
+          </Table>
         </div>
         {!rows.length && <EmptyRecords kind="inquiries" />}
         <Pagination total={results.length} />
       </div>
-      <div className="bi-method-note">{t("Priority means ready to move, qualified, or negotiating. Use the detail view to review full requirements, match parcels, contact the investor, and update status.")}</div>
     </DataBoundary>
   </>;
 }
@@ -362,7 +366,7 @@ export function ParcelsPage() {
     }))
   }];
   return <>
-    <PageHeading eyebrow="A PORTFOLIO WITH PERSPECTIVE" title="Land portfolio" description="Find stale inventory, identify investor demand, and give every opportunity a clear next step." />
+    <PageHeading eyebrow="A PORTFOLIO WITH PERSPECTIVE" title="Land portfolio" description="Find stale inventory, identify investor demand, and give every opportunity a clear next step." action={<AddLandButton />} />
     <DataBoundary>
       <div className="bi-mini-stats">
         <button onClick={() => update("status", search.get("status") === "available" ? "" : "available")} className={search.get("status") === "available" ? "selected" : ""}><MapIcon size={16} /><strong>
@@ -381,14 +385,9 @@ export function ParcelsPage() {
             {t(rowsAll.length)}
           </strong>{t(" parcels match this view")}</span>
         <div className="bi-toolbar-controls">
-          <label>
-            <span className="sr-only">{t("Sort parcels")}</span>
-            <select value={search.get("sort") ?? "days"} onChange={e => update("sort", e.target.value)}>
-              <option value="days">{t("Longest on market")}</option>
-              <option value="price">{t("Price: low to high")}</option>
-              <option value="demand">{t("Most investor matches")}</option>
-            </select>
-          </label>
+          <RecordSelect label="Sort parcels" value={search.get("sort") ?? "days"} onChange={value => update("sort", value)} options={[
+            {value:"days",label:"Longest on market"}, {value:"price",label:"Price: low to high"}, {value:"demand",label:"Most investor matches"}
+          ]} />
           <div className="bi-toggle">
             <button onClick={() => setView("table")} className={view === "table" ? "selected" : ""} aria-pressed={view === "table"} aria-label={t("Table view")}>
               <List size={15} />
@@ -401,64 +400,62 @@ export function ParcelsPage() {
       </div>
       {view === "table" ? <div className="bi-table-panel">
         <div className="bi-table-scroll">
-          <table className="bi-table">
-            <thead>
-              <tr>
-                <th>{t("Parcel / district")}</th>
-                <th>{t("Land / transaction")}</th>
-                <th>{t("Size")}</th>
-                <th>{t("Price")}</th>
-                <th>{t("Days on market")}</th>
-                <th>{t("Investor fit")}</th>
-                <th>{t("Status")}</th>
-                <th>
+          <Table className="bi-table">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Parcel / district")}</TableHead>
+                <TableHead>{t("Land / transaction")}</TableHead>
+                <TableHead>{t("Size")}</TableHead>
+                <TableHead>{t("Price")}</TableHead>
+                <TableHead>{t("Days on market")}</TableHead>
+                <TableHead>{t("Investor fit")}</TableHead>
+                <TableHead>{t("Status")}</TableHead>
+                <TableHead>
                   <span className="sr-only">{t("Inspect parcel")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(p => <tr key={p.parcel_id} className={p.status === "available" && p.days_on_market >= 90 ? "bi-stale-row" : ""}>
-                <td>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(p => <TableRow key={p.parcel_id} className={p.status === "available" && p.days_on_market >= 90 ? "bi-stale-row" : ""}>
+                <TableCell>
                   <button className="bi-cell-link" onClick={() => openParcel(p.parcel_id)}>
                     {locale === "ar" ? p.district_ar : p.district_en}
                     <small>{p.parcel_id}{t(" · ")}{t(p.area_of_city)}{t(" Riyadh")}</small>
                   </button>
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {t(title(p.land_type))}
                   <small>{t("For ")}{t(p.listing_type)}</small>
-                </td>
-                <td>{t(p.area_sqm.toLocaleString())}{t(" m²")}</td>
-                <td>
+                </TableCell>
+                <TableCell>{t(p.area_sqm.toLocaleString())}{t(" m²")}</TableCell>
+                <TableCell>
                   {t(p.total_price_sar === null ? "On request" : currency(p.total_price_sar))}
                   <small>
                     {t(p.listing_type === "lease" ? "Annual rent" : "Total asking price")}
                   </small>
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   <span className={p.days_on_market >= 90 && p.status === "available" ? "bi-stale-days" : ""}>{t(p.days_on_market)}{t(" days")}</span>
                   {p.days_on_market >= 90 && p.status === "available" && <small>{t("Review opportunity")}</small>}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {demand.get(p.parcel_id) ? <span className="bi-fit-count">{t(demand.get(p.parcel_id))}{t(" potential investors")}</span> : <span className="bi-muted">{t("—")}</span>}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   <StatusBadge status={p.status} />
-                </td>
-                <td>
-                  <button className="bi-row-action" aria-label={`Inspect ${p.parcel_id} in ${p.district_en}`} onClick={() => openParcel(p.parcel_id)}>
-                    <ArrowUpRight size={16} />
-                  </button>
-                </td>
-              </tr>)}
-            </tbody>
-          </table>
+                </TableCell>
+                <TableCell>
+                  <RecordActions kind="parcels" record={p} />
+                </TableCell>
+              </TableRow>)}
+            </TableBody>
+          </Table>
         </div>
         {!rows.length && <EmptyRecords kind="parcels" />}
         <Pagination total={rowsAll.length} />
       </div> : <>
         <div className="bi-parcel-card-grid">
-          {rows.map(p => <button key={p.parcel_id} className="bi-parcel-card" onClick={() => openParcel(p.parcel_id)}>
+          {rows.map(p => <div key={p.parcel_id} className="bi-parcel-card-frame"><button className="bi-parcel-card" onClick={() => openParcel(p.parcel_id)}>
             <div className="bi-parcel-illustration" style={{
               backgroundImage: `url(/images/${p.land_type === "commercial" ? "commercial" : "residential"}.webp)`
             }}>
@@ -478,7 +475,7 @@ export function ParcelsPage() {
               </strong>
               <footer>{t(p.days_on_market)}{t(" days on market")}<span>{t(demand.get(p.parcel_id) ?? 0)}{t(" investor fits")}</span></footer>
             </div>
-          </button>)}
+          </button><RecordActions kind="parcels" record={p} /></div>)}
         </div>
         {!rows.length && <EmptyRecords kind="parcels" />}
         <Pagination total={rowsAll.length} />

@@ -154,10 +154,10 @@
   margin-inline: auto;
 }
 .site-header {
-  background: #ffffff;
+  background: var(--sarj-surface, #ffffff);
   position: relative;
   z-index: 30;
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid var(--sarj-border, #e4e4e7);
 }
 .header-inner {
   height: 94px;
@@ -2607,3 +2607,15 @@
 .hero-photo img { filter: none; }
 [dir=rtl] :is(.lucide-arrow-left,.lucide-arrow-right) { transform: rotate(180deg); }
 [dir=rtl] .lucide-arrow-up-right { transform: scaleX(-1); }
+
+/* Shared investor/admin brand surfaces and header proportions. */
+:root {
+  --sarj-canvas: #ffffff;
+  --sarj-surface: #ffffff;
+  --sarj-border: #e4e4e7;
+  --sarj-green: #15803d;
+  --sarj-header-height: 84px;
+}
+.site-header { background: var(--sarj-surface); border-color: var(--sarj-border); }
+.header-inner { height: var(--sarj-header-height); }
+@media (max-width: 640px) { :root { --sarj-header-height: 76px; } }

@@ -4,7 +4,7 @@ import { useLanguage } from "@/components/shared/language";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Parcel } from "@/features/parcels/types/parcel";
 import type { Inquiry } from "@/features/inquiries/types/inquiry";
-import { getBusinessData, saveInquiryStatus } from "../lib/api";
+import { getBusinessData, saveInquiryStatus, saveRecord, deleteRecord, createLand } from "../lib/api";
 import { analyze, insights } from "../lib/analytics";
 type Data = {
   parcels: Parcel[];
@@ -16,6 +16,9 @@ type BusinessData = Data & {
   updatedAt: string;
   refresh: () => void;
   updateStatus: (id: string, status: string) => Promise<void>;
+  editRecord: (kind: "parcels" | "inquiries", id: string, values: Record<string, unknown>) => Promise<void>;
+  removeRecord: (kind: "parcels" | "inquiries", id: string) => Promise<void>;
+  addLand: (values: Record<string, unknown>) => Promise<void>;
   analysis: ReturnType<typeof analyze>;
   observations: ReturnType<typeof insights>;
 };
@@ -133,6 +136,34 @@ export function BusinessProvider({
     }
   }, []);
   // Compute the portfolio analysis once per dataset update, not once per consumer.
+  const addLand = useCallback(async (values: Record<string, unknown>) => {
+    if (mutation.current) throw new Error("Another status update is in progress.");
+    mutation.current = true;
+    try {
+      const created = await createLand(values);
+      setData(prev => ({ ...prev, parcels: [...prev.parcels, created] }));
+    } finally { mutation.current = false; }
+  }, []);
+  const editRecord = useCallback(async (kind: "parcels" | "inquiries", id: string, values: Record<string, unknown>) => {
+    if (mutation.current) throw new Error("Another status update is in progress.");
+    mutation.current = true;
+    try {
+      const updated = await saveRecord(kind, id, values);
+      setData(prev => kind === "parcels"
+        ? { ...prev, parcels: prev.parcels.map(p => p.parcel_id === id ? updated as Parcel : p) }
+        : { ...prev, inquiries: prev.inquiries.map(q => q.inquiry_id === id ? updated as Inquiry : q) });
+    } finally { mutation.current = false; }
+  }, []);
+  const removeRecord = useCallback(async (kind: "parcels" | "inquiries", id: string) => {
+    if (mutation.current) throw new Error("Another status update is in progress.");
+    mutation.current = true;
+    try {
+      await deleteRecord(kind, id);
+      setData(prev => kind === "parcels"
+        ? { ...prev, parcels: prev.parcels.filter(p => p.parcel_id !== id), inquiries: prev.inquiries.map(q => q.selected_parcel_id === id ? { ...q, selected_parcel_id: null } : q) }
+        : { ...prev, inquiries: prev.inquiries.filter(q => q.inquiry_id !== id) });
+    } finally { mutation.current = false; }
+  }, []);
   const analysis = useMemo(() => analyze(data.parcels, data.inquiries), [data.parcels, data.inquiries]);
   const observations = useMemo(() => insights(data.parcels, data.inquiries, analysis), [data.parcels, data.inquiries, analysis]);
   const value = useMemo(() => ({
@@ -142,9 +173,12 @@ export function BusinessProvider({
     updatedAt,
     refresh,
     updateStatus,
+    editRecord,
+    removeRecord,
+    addLand,
     analysis,
     observations
-  }), [data, loading, error, updatedAt, refresh, updateStatus, analysis, observations]);
+  }), [data, loading, error, updatedAt, refresh, updateStatus, editRecord, removeRecord, addLand, analysis, observations]);
   return <DataContext.Provider value={value}><DetailProvider>{t(children)}</DetailProvider></DataContext.Provider>;
 }
 export function DataBoundary({

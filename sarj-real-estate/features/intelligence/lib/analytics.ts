@@ -105,6 +105,9 @@ export type BusinessInsight = {
   body: string;
   href: string;
   tone: "gold" | "green" | "red";
+  affected: number;
+  unit: "inquiries" | "parcels";
+  basis: string;
 };
 export function insights(parcels: Parcel[], inquiries: Inquiry[], a = analyze(parcels, inquiries)): BusinessInsight[] {
   const observations: BusinessInsight[] = [];
@@ -119,7 +122,8 @@ export function insights(parcels: Parcel[], inquiries: Inquiry[], a = analyze(pa
       title: `Commercial demand leads in ${top.map(x => x.area).join(" & ")} Riyadh.`,
       body: `${commercial[0].count} open commercial inquiries per leading area. Review the investors and their budget requirements.`,
       href: `/admin/inquiries?area=${commercial[0].area}&type=commercial&open=1`,
-      tone: "green"
+      tone: "green", affected: top.reduce((sum, row) => sum + row.count, 0), unit: "inquiries",
+      basis: "Open commercial inquiries grouped by preferred Riyadh area. Equal counts share the lead."
     });
   }
   const gap = a.segments.find(s => s.unmatched > 0);
@@ -128,39 +132,45 @@ export function insights(parcels: Parcel[], inquiries: Inquiry[], a = analyze(pa
     title: `${gap.area} ${gap.type} ${gap.listing}: ${gap.unmatched} investors without a fit.`,
     body: `${gap.demand} open inquiries against ${gap.supply} available parcels. Area, type, transaction, and supplied budgets are checked.`,
     href: `/admin/demand?area=${gap.area}&type=${gap.type}&listing=${gap.listing}`,
-    tone: "red"
+    tone: "red", affected: gap.unmatched, unit: "inquiries",
+    basis: "Open inquiries in this area, land type, and transaction with no available match for their stated preferences and budget."
   });
-  if (a.oldest[0]) observations.push({
+  const stale = a.available.filter(parcel => parcel.days_on_market >= 90);
+  if (stale.length) observations.push({
     label: "INVENTORY TO REVISIT",
     title: `${a.oldest[0].district_en}: ${a.oldest[0].days_on_market} reported days on market.`,
-    body: `Review the ${a.oldest.length} oldest available parcels and identify investor matches before changing the proposition.`,
+    body: `Review the ${a.oldest.filter(parcel => parcel.days_on_market >= 90).length} oldest available parcels and identify investor matches before changing the proposition.`,
     href: "/admin/parcels?stale=1&status=available",
-    tone: "gold"
+    tone: "gold", affected: stale.length, unit: "parcels",
+    basis: "Available parcels with 90 or more reported days on market. Sold, leased, and reserved parcels are excluded."
   });
   const buyers = a.priority.filter(q => transaction(q.prefers) === "sale").length;
   const lessees = a.priority.filter(q => transaction(q.prefers) === "lease").length;
-  if (a.priority.length) observations.push({
+  if (buyers + lessees > 0) observations.push({
     label: "HIGH-INTENT PIPELINE",
     title: buyers > lessees ? "Priority investors lean toward buying." : lessees > buyers ? "Priority investors lean toward leasing." : "Priority investors show balanced transaction demand.",
     body: `${buyers} buyers and ${lessees} lease prospects are ready to move, qualified, or negotiating. Prioritize a tailored shortlist and follow-up.`,
     href: "/admin/inquiries?priority=1",
-    tone: "green"
+    tone: "green", affected: buyers + lessees, unit: "inquiries",
+    basis: "Open buy/lease inquiries marked ready to move, qualified, or negotiating. Closed inquiries are excluded."
   });
   if (a.noMatch.length) observations.push({
     label: "FOLLOW-UP OPPORTUNITY",
     title: `${a.noMatch.length} open inquiries need a different approach.`,
     body: "No currently available parcel meets all supplied preferences and budget. Explore alternatives or clarify the investor’s flexibility.",
     href: "/admin/inquiries?unmatched=1",
-    tone: "gold"
+    tone: "gold", affected: a.noMatch.length, unit: "inquiries",
+    basis: "Each open inquiry is checked against every available parcel using area, land type, transaction, and supplied budget."
   });
   if (!observations.length) observations.push({
     label: "READY FOR OPPORTUNITY",
     title: "Your next business signal starts with an inquiry.",
     body: "As inventory and investor demand develop, observations and matching opportunities will appear here.",
     href: "/admin/inquiries",
-    tone: "green"
+    tone: "green", affected: 0, unit: "inquiries",
+    basis: "No qualifying signals in the current portfolio and inquiry records."
   });
-  return observations;
+  return observations.sort((x, y) => y.affected - x.affected || x.label.localeCompare(y.label));
 }
 export const currency = (value: number | null) => value === null ? "Not provided" : `SAR ${new Intl.NumberFormat("en-SA", {
   maximumFractionDigits: 0

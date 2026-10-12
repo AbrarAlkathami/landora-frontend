@@ -10,10 +10,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     try {
       const error = await response.json();
       if (typeof error.detail === "string") message = error.detail;
+      else if (Array.isArray(error.detail)) message = error.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(" · ") || message;
     } catch {}
     throw new Error(message);
   }
-  return response.json();
+  return response.status === 204 ? undefined as T : response.json();
 }
 async function allPages<T>(endpoint: string, signal?: AbortSignal) {
   const items: T[] = [];
@@ -49,4 +50,15 @@ export function saveInquiryStatus(id: string, status: string) {
       status
     })
   });
+}
+export function saveRecord(kind: "parcels" | "inquiries", id: string, data: Record<string, unknown>) {
+  return request<Parcel | Inquiry>(`${kind}/${encodeURIComponent(id)}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data)
+  });
+}
+export function deleteRecord(kind: "parcels" | "inquiries", id: string) {
+  return request<void>(`${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+export function createLand(data: Record<string, unknown>) {
+  return request<Parcel>("parcels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 }

@@ -1,8 +1,10 @@
 # Sarj leadership intelligence
 
-The admin experience adds a decision-making layer over the existing portfolio and inquiry APIs. Investor and admin pages share a black, white, and green identity, with denser data presentation in admin. The investor header/footer and admin sidebar use `components/shared/sarj-logo.tsx` for the same mark, typography, Arabic lettering, and proportions.
+The admin experience adds a decision-making layer over the existing portfolio and inquiry APIs. Investor and admin pages share a black, white, and green identity, with denser data presentation in admin. The investor header/footer and admin sidebar use `components/shared/sarj-logo.tsx` for the same mark and typography. Both headers share surface tokens and responsive height. Admin retains its sidebar branding and workspace header, and the page canvas is white.
 
 The shared language switch changes English/LTR to Arabic/RTL and persists the choice locally. District labels use the existing English and Arabic database fields. Free-text investor records keep their original language. No database migration is required for the interface language.
+
+Business insights recalculate from the loaded backend records and after inquiry status updates. Cards sort by affected record count, with category name breaking ties; the order is not a severity or revenue prediction. Each card displays its count and a calculation explanation. Stale inventory requires available status and at least 90 reported days on market. Refresh reloads the records; there is no live subscription to external database changes.
 
 Portfolio analysis is cached when records change. Drawer selection uses a separate context so opening a detail drawer does not invalidate dashboard data consumers. Dialogs and sheets use short transitions without full-screen backdrop blur. Production compilation and analytics tests validate the implementation; browser frame timing still needs verification in the deployed environment.
 
@@ -20,7 +22,9 @@ Dashboard → demand segment → filtered inquiries → inquiry drawer → match
 
 ## Data connection
 
-`features/intelligence/lib/api.ts` loads every page of parcels and inquiries from the existing backend. The same-origin bridge at `/api/admin/[...path]` accepts portfolio/inquiry GET requests and status-only inquiry PATCH requests. It uses the same `API_URL` / `NEXT_PUBLIC_API_URL` configuration as the investor bridge, defaulting to `http://localhost:8000/api/v1`.
+`features/intelligence/lib/api.ts` loads every page of parcels and inquiries from the existing backend. The same-origin bridge at `/api/admin/[...path]` accepts collection GET requests, parcel/inquiry PATCH and DELETE requests, and parcel POST requests. Editable fields are allowlisted; existing record IDs cannot be changed. It uses the same `API_URL` / `NEXT_PUBLIC_API_URL` configuration as the investor bridge, defaulting to `http://localhost:8000/api/v1`.
+
+Land Portfolio includes an Add land form. Parcel and inquiry row menus provide View, Edit, and confirmed permanent Delete actions; parcel cards also include the menu. Successful writes update the loaded data and recompute metrics, matches, and insights. Failed writes leave the record intact and show an error. Deleting a parcel clears linked inquiry references through the database foreign key. Demand vs Inventory shares the same shadcn table/filter primitives and compact summary styling as both record pages.
 
 The provider loads both datasets together, supports explicit refresh, shows loading skeletons and retry states, and never substitutes fictional records when the backend fails. A successful status update replaces that inquiry in the shared snapshot; demand, pipeline counts, matches, and insights recompute immediately. A failure keeps the original record and displays a retryable error.
 
@@ -59,6 +63,6 @@ npx next build --webpack
 node --test tests/intelligence.test.mjs
 ```
 
-The analytics tests use Node's built-in runner and native TypeScript stripping (Node 22.18+). Six tests cover segment reconciliation, missing prices, budget basis, separate averages, budget-driven gaps, pipeline status changes, and empty data. Additional checks validate filtered component rendering, complete API pagination, safe status-only forwarding, invalid statuses, outage handling, and persistence through the existing FastAPI status endpoint in an isolated SQLite fixture.
+The analytics tests use Node's built-in runner and native TypeScript stripping (Node 22.18+). Seven tests cover segment reconciliation, missing prices, budget basis, separate averages, budget-driven gaps, pipeline status changes, empty data, and dynamic insight ordering. Additional checks validate filtered component rendering, API pagination, mutation forwarding, immutable IDs, 204 responses, and create/edit/delete persistence with duplicate-ID and parcel-reference checks in an isolated SQLite database. No live records are created, changed, or deleted during verification.
 
 The production build and tests pass. Lint retains one pre-existing unused import warning in `features/chat/types/chat.ts`. This sandbox cannot launch Chrome or reach the live local backend, so browser and live-service checks remain unverified. Start the existing backend, run `npm run dev`, and open `http://localhost:3000/admin` for local review.

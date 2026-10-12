@@ -50,3 +50,18 @@ test('zero-data insights offer an action without inventing business trends', () 
   assert.equal(rows.length,1);
   assert.equal(rows[0].href,'/admin/inquiries');
 });
+
+test('insights reorder by affected records as demand and inventory change', () => {
+  const fresh = {...parcel, days_on_market: 12};
+  const demand = [1,2,3].map(i => ({...inquiry,inquiry_id:`dynamic-${i}`,budget_sar:100}));
+  const first=insights([fresh],demand);
+  assert.ok(first.every((row,index)=>!index || row.affected<=first[index-1].affected));
+  assert.ok(first.every(row=>row.basis && row.unit));
+  assert.equal(first.find(row=>row.label==='FOLLOW-UP OPPORTUNITY').affected,3);
+  assert.ok(!first.some(row=>row.label==='INVENTORY TO REVISIT'));
+  const closed=demand.map(row=>({...row,status:'closed'}));
+  const changed=insights([{...fresh,days_on_market:120}],closed);
+  assert.equal(changed[0].label,'INVENTORY TO REVISIT');
+  assert.equal(changed[0].affected,1);
+  assert.ok(!changed.some(row=>row.label==='FOLLOW-UP OPPORTUNITY'||row.label==='DEMAND SIGNAL'));
+});
