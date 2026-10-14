@@ -130,14 +130,16 @@ export function InvestorShell({
     setInput("");
     setChatError("");
     const comparing = /(compare|قارن|مقارنة)/i.test(text);
-    if (comparing) setCompare(true);
     if (comparing && (!selectedIds[0] || !selectedIds[1])) {
+      setCompare(true);
       setMessages(prev => [...prev, {
         role: "advisor",
         text: t("Choose two opportunities below to compare their current listing details.")
       }]);
       return;
     }
+    setCompare(false);
+    setCompareIds([]);
     void requestAnswer(text, comparing ? selectedIds : parcel ? [parcel.id] : undefined);
   }, [contextParcel, compareIds, requestAnswer, t]);
   async function submitInquiry(event: React.FormEvent<HTMLFormElement>) {
